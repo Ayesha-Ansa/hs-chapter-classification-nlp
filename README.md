@@ -12,7 +12,7 @@ Inspired by my experience in Amazon Product Compliance, where I worked on assign
 
 ## 🚀 Live Demo
 
-👉 **[Try the Streamlit Application](REPLACE_WITH_YOUR_STREAMLIT_APP_LINK)**
+👉 **[Try the Streamlit Application](https://hs-chapter-classification-nlp-eazxgagweuzdcaglwnefju.streamlit.app/)**
 
 Enter a commodity description and the application predicts its corresponding HS Chapter using the trained NLP model.
 
