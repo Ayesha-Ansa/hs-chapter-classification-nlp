@@ -11,6 +11,33 @@ st.set_page_config(
 )
 
 # --------------------------------------------------
+# Minimal custom styling
+# --------------------------------------------------
+st.markdown(
+    """
+    <style>
+    .main > div {
+        padding-top: 2rem;
+    }
+    .stButton button {
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    .example-chip {
+        display: inline-block;
+        background-color: #f0f2f6;
+        border-radius: 16px;
+        padding: 4px 14px;
+        margin: 4px;
+        font-size: 0.85rem;
+        color: #333;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# --------------------------------------------------
 # Load Trained Model
 # --------------------------------------------------
 @st.cache_resource
@@ -25,47 +52,27 @@ model = load_model()
 # --------------------------------------------------
 st.title("📦 HS Chapter Classification")
 st.markdown(
-    """
-    **NLP-based commodity classification using TF-IDF and Linear SVM**
-    
-    Enter a commodity description below to predict its **HS Chapter**.
-    """
+    "**NLP-based commodity classification using TF-IDF and Linear SVM**"
 )
+st.caption(
+    "Predicts the 2-digit HS Chapter from a commodity description. "
+    "Not the full Canadian HTS code."
+)
+
+# --------------------------------------------------
+# Model performance strip
+# --------------------------------------------------
+col1, col2, col3 = st.columns(3)
+col1.metric("Test Accuracy", "82.01%")
+col2.metric("Macro F1", "79.04%")
+col3.metric("Model", "Linear SVM")
 
 st.divider()
 
 # --------------------------------------------------
-# User Input
+# Example chips (click to fill the input)
 # --------------------------------------------------
-description = st.text_area(
-    "Enter Commodity Description",
-    placeholder="Example: Cotton woven fabric",
-    height=120
-)
-
-# --------------------------------------------------
-# Prediction
-# --------------------------------------------------
-if st.button("🔍 Predict HS Chapter", use_container_width=True):
-
-    if not description.strip():
-        st.warning("Please enter a commodity description.")
-    else:
-        prediction = model.predict([description])[0]
-
-        st.success(f"Predicted HS Chapter: **{prediction}**")
-
-        st.info(
-            "This model predicts the 2-digit HS Chapter based on the "
-            "commodity description."
-        )
-
-# --------------------------------------------------
-# Example Inputs
-# --------------------------------------------------
-st.divider()
-
-st.subheader("💡 Try an Example")
+st.markdown("**💡 Try an example:**")
 
 examples = [
     "Live sheep",
@@ -76,15 +83,50 @@ examples = [
     "Plastic household articles"
 ]
 
-for example in examples:
-    st.write(f"• {example}")
+if "description_input" not in st.session_state:
+    st.session_state.description_input = ""
+
+example_cols = st.columns(3)
+for i, example in enumerate(examples):
+    with example_cols[i % 3]:
+        if st.button(example, key=f"ex_{i}", use_container_width=True):
+            st.session_state.description_input = example
+
+st.write("")
 
 # --------------------------------------------------
-# Project Information
+# User Input
+# --------------------------------------------------
+description = st.text_area(
+    "Enter Commodity Description",
+    value=st.session_state.description_input,
+    placeholder="Example: Cotton woven fabric",
+    height=100,
+    key="description_box"
+)
+
+# --------------------------------------------------
+# Prediction
+# --------------------------------------------------
+predict_clicked = st.button("🔍 Predict HS Chapter", use_container_width=True, type="primary")
+
+if predict_clicked:
+    if not description.strip():
+        st.warning("Please enter a commodity description.")
+    else:
+        prediction = model.predict([description])[0]
+
+        st.success(f"### Predicted HS Chapter: **{prediction}**")
+        st.info(
+            "This model predicts the 2-digit HS Chapter based on the "
+            "commodity description."
+        )
+
+# --------------------------------------------------
+# Footer
 # --------------------------------------------------
 st.divider()
-
 st.caption(
-    "Model: Tuned Linear SVM | Features: TF-IDF | "
-    "Test Accuracy: 82.01% | Macro F1: 79.04%"
+    "Prototype decision-support tool — not a substitute for expert tariff "
+    "classification. Built by Ayesha Ansari."
 )
