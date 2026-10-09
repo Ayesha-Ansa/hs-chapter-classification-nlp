@@ -138,63 +138,43 @@ def show_candidates(classes, probabilities, indices, heading):
 
 
 # ============================================================
-# PREDICTION + ABSTENTION SAFEGUARD
+PREDICTION
 # ============================================================
 
 if st.button("Predict HS4 Code", type="primary", use_container_width=True):
-    cleaned_text = product_text.strip().lower()
+cleaned_text = product_text.strip().lower()
 
-    if not cleaned_text:
-        st.warning("Please enter a product description.")
-    else:
-        try:
-            with st.spinner("Analyzing product description..."):
-                probabilities = model.predict_proba([cleaned_text])[0]
-                classes = model.classes_
-                top_indices = probabilities.argsort()[-3:][::-1]
-                top_score = float(probabilities[top_indices[0]])
+if not cleaned_text:
+    st.warning("Please enter a product description.")
+else:
+    try:
+        with st.spinner("Analyzing product description..."):
+            probabilities = model.predict_proba([cleaned_text])[0]
+            classes = model.classes_
+            top_indices = probabilities.argsort()[-3:][::-1]
 
-            if top_score < ABSTAIN_THRESHOLD:
-                st.error("⚠️ Unable to provide a sufficiently confident prediction")
-                st.write(
-                    f"The highest model score is **{top_score * 100:.2f}%**, "
-                    f"below the app's provisional review threshold of "
-                    f"**{ABSTAIN_THRESHOLD * 100:.0f}%**."
-                )
-                st.warning(
-                    "This product may belong to a category the model does not "
-                    "support, or the description may be ambiguous or unfamiliar. "
-                    "The model cannot determine from its score alone whether a "
-                    "correct HS4 class was excluded during training."
-                )
-                show_candidates(
-                    classes,
-                    probabilities,
-                    top_indices,
-                    "Possible matches — treat these as uncertain, not recommendations",
-                )
-                st.info(
-                    "Try adding relevant details such as material, construction, "
-                    "intended use, and product form. If the result remains uncertain, "
-                    "verify the code using an authoritative tariff source or a "
-                    "qualified reviewer."
-                )
-            else:
-                st.warning(
-                    "The model found a higher-scoring candidate, but it can still "
-                    "be incorrect. Verify the heading before relying on it."
-                )
-                show_candidates(
-                    classes,
-                    probabilities,
-                    top_indices,
-                    "Top-3 HS4 candidate headings",
-                )
+            predicted_code = str(classes[top_indices[0]])
+            top_score = float(probabilities[top_indices[0]])
 
-        except Exception as exc:
-            st.error("An error occurred while generating the prediction.")
-            st.code(str(exc))
+        # Show the prediction without a blanket confidence warning.
+        st.success(f"Predicted HS4 Code: {predicted_code}")
+        st.write(f"Model score: **{top_score * 100:.2f}%**")
 
+        show_candidates(
+            classes,
+            probabilities,
+            top_indices,
+            "Top-3 HS4 candidate headings",
+        )
+
+        st.caption(
+            "Model scores are not guarantees of correctness. "
+            "Verify the predicted code against an authoritative tariff source."
+        )
+
+    except Exception as exc:
+        st.error("An error occurred while generating the prediction.")
+        st.code(str(exc))
 
 # ============================================================
 # MODEL INFORMATION
