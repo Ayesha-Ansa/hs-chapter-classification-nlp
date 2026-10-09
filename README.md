@@ -1,173 +1,131 @@
 # HS4 Code Prediction
 
-### NLP-Based Product Classification with Calibrated Linear SVM
+### Product Classification using NLP, TF-IDF and Calibrated Linear SVM
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Open%20App-FF4B4B?logo=streamlit\&logoColor=white)](https://hs4-code-prediction-wampk2tvldwfbcgrfjmkfy.streamlit.app/)
-[![Python](https://img.shields.io/badge/Python-3.13-blue?logo=python\&logoColor=white)](https://www.python.org/)
-[![Scikit-learn](https://img.shields.io/badge/scikit--learn-1.6.1-orange?logo=scikitlearn)](https://scikit-learn.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+An NLP-based machine learning project that predicts the **4-digit Harmonized System (HS4) heading** from a product description.
 
-**[🚀 Try the Live Application](https://hs4-code-prediction-wampk2tvldwfbcgrfjmkfy.streamlit.app/)**
+The model returns a ranked list of three candidate codes to support human review, rather than making automatic customs-classification decisions.
 
-An NLP-based machine learning application that predicts the **four-digit Harmonized System (HS4) heading** from a product description. It returns three ranked candidate codes with confidence estimates to support human review.
+## 🚀 Live Demo
 
-The project covers the complete workflow—from data cleaning and feature engineering to model evaluation, serialization, and Streamlit deployment.
+**[Try the HS4 Code Prediction App](https://hs4-code-prediction-wampk2tvldwfbcgrfjmkfy.streamlit.app/)**
 
-## Model Performance
+Enter a product description to view the model's top three predicted HS4 headings and their estimated confidence scores.
 
-Evaluated on **2,976 held-out test samples** across 252 supported HS4 classes.
+## 📌 Project Overview
 
-| Metric                      |        Result |
-| --------------------------- | ------------: |
-| Top-1 Accuracy              |    **69.62%** |
-| Top-3 Accuracy              |    **81.69%** |
-| Macro F1-Score              |    **0.5906** |
-| Majority-Class Baseline     |         7.09% |
-| Correct Top-1 Predictions   | 2,072 / 2,976 |
-| Incorrect Top-1 Predictions |   904 / 2,976 |
+Product classification requires understanding product descriptions and identifying relevant tariff headings. This project explores how traditional NLP and machine learning techniques can support that process.
 
-### Performance at a glance
-
-```text
-Top-1 Accuracy   ██████████████░░░░░░  69.62%
-Top-3 Accuracy   ████████████████░░░░  81.69%
-Majority Baseline ██░░░░░░░░░░░░░░░░  7.09%
-```
-
-**Evaluation note:** These results come from a random stratified holdout of the cleaned dataset. Near-duplicate overlap between training and test descriptions has not yet been measured, so performance on genuinely novel products may differ.
-
-## How It Works
+### Workflow
 
 ```mermaid
 flowchart TD
-    A["Product Description"] --> B["Text Cleaning"]
-    B --> C["Word TF-IDF"]
-    B --> D["Character TF-IDF"]
-    C --> E["Combined Features"]
+    A[Product Description] --> B[Text Preprocessing]
+    B --> C[Word-Level TF-IDF]
+    B --> D[Character-Level TF-IDF]
+    C --> E[Combined Feature Matrix]
     D --> E
-    E --> F["Calibrated Linear SVM"]
-    F --> G["Top-3 HS4 Predictions"]
-    G --> H["Human Review"]
+    E --> F[Calibrated Linear SVM]
+    F --> G[Top-3 HS4 Predictions]
 ```
 
-### Model Architecture
+## 📊 Model Performance
 
-* **Word-level TF-IDF:** Captures individual terms and word combinations.
-* **Character-level TF-IDF:** Captures smaller text patterns, technical terminology, and spelling variations.
-* **Calibrated Linear SVM:** Classifies descriptions into supported HS4 classes and produces probability estimates for ranking predictions.
-* **Top-3 output:** Provides a shortlist instead of relying exclusively on one predicted code.
+Evaluated on **2,976 held-out test samples** across 252 HS4 classes.
 
-## Dataset
+| Metric                  |     Result |
+| ----------------------- | ---------: |
+| Top-1 Accuracy          | **69.62%** |
+| Top-3 Accuracy          | **81.69%** |
+| Macro F1-score          | **0.5906** |
+| Test Samples            |      2,976 |
+| HS4 Classes             |        252 |
+| Majority-Class Baseline |      7.09% |
 
-The project uses the training split of the [CROSS Rulings HTS Dataset for Tariff Classification](https://huggingface.co/datasets/flexifyai/cross_rulings_hts_dataset_for_tariffs), derived from U.S. Customs and Border Protection's CROSS rulings.
+**Top-1 accuracy** measures whether the first prediction matches the correct heading. **Top-3 accuracy** measures whether the correct heading appears among the model's three highest-ranked predictions.
 
-The source dataset contains **18,254 training records**. After parsing, cleaning, deduplication, and filtering, the final dataset contains:
+## 🗂️ Dataset
 
-| Dataset Metric        |  Count |
-| --------------------- | -----: |
-| Cleaned records       | 14,880 |
-| Training samples      | 11,904 |
-| Test samples          |  2,976 |
-| Supported HS4 classes |    252 |
+The project uses the training split of a publicly available conversational tariff-classification dataset.
 
-Preprocessing includes text normalization, HS4 extraction, removal of invalid records, exclusion of conflicting descriptions, deduplication, and filtering of classes with fewer than 10 remaining examples.
+* [Dataset used in the project](https://huggingface.co/datasets/Dayanand314Krishna/cross_rulings_hts_dataset_for_tariffs)
+* Original dataset: [CROSS Rulings HTS Dataset for Tariff Classification](https://huggingface.co/datasets/flexifyai/cross_rulings_hts_dataset_for_tariffs)
 
-## Model Coverage and Data Limitations
+**Attribution:** “CROSS Rulings HTS Dataset for Tariff Classification by Flexify.AI Inc. (https://www.flexify.ai)”
 
-The project identified **548 distinct HS4 codes** in the parsed source data, while the final model supports 252 classes.
+The original records contain conversations in a `messages` field. The project extracts product descriptions and associated HS codes to build a text-classification dataset.
 
-| Coverage Metric                        |          Result |
-| -------------------------------------- | --------------: |
-| Distinct codes identified              |             548 |
-| Codes supported by the model           |             252 |
-| Codes not supported                    |             296 |
-| Distinct-code coverage                 |      **45.99%** |
-| Eligible records with supported labels | 16,625 / 17,509 |
-| Record-level label coverage            |      **94.95%** |
+### Data Preparation
 
-```text
-Distinct-code coverage   █████████░░░░░░░░░░░  45.99%
-Record-level coverage    ███████████████████░  94.95%
-```
+| Processing stage                         |    Records |
+| ---------------------------------------- | ---------: |
+| Original parsed records                  |     18,254 |
+| Valid descriptions and codes             |     18,233 |
+| After removing conflicting descriptions  |     17,509 |
+| After exact duplicate removal            |     15,697 |
+| Final dataset after rare-class filtering | **14,880** |
 
-These measure different things. Many frequent classes account for a large share of records, while numerous other codes appear infrequently. Record-level coverage is a preliminary dataset-specific measure; it is not a guarantee of real-world product coverage.
+The final dataset was split into 11,904 training samples and 2,976 test samples using stratified sampling.
 
-**Important limitations:**
+## 🧠 Model and Techniques
 
-* The model cannot predict HS4 codes absent from its learned labels.
-* Some source responses contain multiple products or tariff codes; the current parser extracts the first identifiable code.
-* Class imbalance affects performance on less frequent headings.
-* Near-duplicate overlap across training and test sets has not been measured.
-* Confidence reliability needs further validation on independent data.
+The final model combines:
 
-A confidence analysis on the current test set produced an expected calibration error (ECE) of **0.1887**. For predictions with confidence of at least 60%, observed Top-1 accuracy was 92.73% across 42.54% of test cases. These results are exploratory and should not be treated as a validated production acceptance rule.
+* **Word TF-IDF:** Captures individual terms and two-word combinations.
+* **Character TF-IDF:** Captures word patterns, spelling variations and technical terminology.
+* **Linear SVM:** Classifies descriptions across the supported HS4 classes.
+* **Probability calibration:** Produces estimates used to rank the top three candidate headings.
+* **Stratified train/test split:** Evaluates performance on held-out samples.
 
-## Manual Edge-Case Testing
+A feature comparison showed that combining word and character features improved Top-1 accuracy from **66.70% to 69.62%** and Top-3 accuracy from **78.80% to 81.69%** on the same test split.
 
-The deployed application was manually tested on 12 deliberately varied product descriptions.
+## 🔎 Error Analysis and Coverage
 
-| Metric                          |     Result |
-| ------------------------------- | ---------: |
-| Manual test cases               |         12 |
-| Correct code found in Top 3     |          7 |
-| Expected code absent from Top 3 |          5 |
-| Manual Top-3 hit rate           | **58.33%** |
+The project includes `test_predictions.csv` and `wrong_predictions.csv` to inspect model results and understand classification errors.
 
-Some failures involved unsupported HS4 classes, while others involved supported classes that the model did not rank in the Top 3. This was a small, challenging manual test and is not directly comparable to the held-out test-set accuracy.
+The source contained many distinct HS4 codes, but the final model supports 252 classes after data cleaning and filtering.
 
-## Technologies Used
+* **94.80% record-level coverage** across the eligible, deduplicated records before rare-class filtering.
+* **45.99% distinct-code coverage** based on the codes identified in the parsed source.
+* A small, manually selected stress test placed the expected heading in the Top-3 results for 7 of 12 cases.
 
-* Python
-* Pandas and NumPy
-* Scikit-learn
-* Word and character TF-IDF
-* Linear Support Vector Machine
-* Sigmoid probability calibration
-* Hugging Face Datasets
-* Joblib
-* Streamlit
-* Google Colab / Jupyter
-* GitHub
+These figures describe this dataset and the selected test cases; they do not establish performance across all possible products.
 
-## Repository Structure
+## ⚠️ Limitations
 
-```text
-hs4-code-prediction/
-├── app.py
-├── hs4_code_classifier.ipynb
-├── README.md
-├── requirements.txt
-├── model_info.pkl
-├── test_predictions.csv
-├── wrong_predictions.csv
-└── LICENSE
-```
+* The model can only predict HS4 classes represented in its training labels.
+* Some product descriptions are ambiguous or contain multiple products.
+* The extraction process selects the first HS4 code identified in an assistant response, which can introduce label noise.
+* Confidence estimates should be treated as ranking aids, not guarantees of correctness.
+* HS4 headings are not complete country-specific tariff codes.
 
-The trained model, `final_hs4_calibrated_svm.pkl`, is approximately 309 MB and is hosted separately through [GitHub Releases](https://github.com/Ayesha-Ansa/hs4-code-prediction/releases).
+**This project is for portfolio and educational purposes. It is not a substitute for official customs guidance or expert tariff classification.**
 
-## Future Improvements
+## 🛠️ Technologies Used
 
-* Expand training data for unsupported HS4 headings.
-* Improve handling of descriptions containing multiple products.
-* Evaluate the model with grouped or near-duplicate-aware splits.
-* Compare word-only and word-plus-character features.
-* Validate confidence thresholds on separate validation data.
-* Add warnings for unsupported or low-confidence predictions.
+Python · Pandas · NumPy · Scikit-learn · TF-IDF · Linear SVM · Hugging Face Datasets · Joblib · Streamlit · Jupyter Notebook
 
-## Responsible Use
+## 📁 Project Files
 
-This application is an experimental **classification decision-support tool**, not an authoritative customs-classification service. Predictions should be reviewed against the applicable tariff schedule and product details by a qualified reviewer.
+| File                                                                                                                  | Purpose                                                         |
+| --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`hs4_code_classifier.ipynb`](https://github.com/Ayesha-Ansa/hs4-code-prediction/blob/main/hs4_code_classifier.ipynb) | Data preparation, model training, evaluation and error analysis |
+| [`app.py`](https://github.com/Ayesha-Ansa/hs4-code-prediction/blob/main/app.py)                                       | Streamlit prediction interface                                  |
+| [`requirements.txt`](https://github.com/Ayesha-Ansa/hs4-code-prediction/blob/main/requirements.txt)                   | Python dependencies                                             |
+| `model_info.pkl`                                                                                                      | Model metadata                                                  |
+| `test_predictions.csv`                                                                                                | Predictions on the held-out test set                            |
+| `wrong_predictions.csv`                                                                                               | Incorrect Top-1 predictions                                     |
+| [`GitHub Releases`](https://github.com/Ayesha-Ansa/hs4-code-prediction/releases)                                      | Downloadable trained model artifact                             |
 
-## Dataset Attribution
+## 🔮 Potential Improvements
 
-CROSS Rulings HTS Dataset for Tariff Classification by Flexify.AI Inc. ([Flexify.AI](https://www.flexify.ai)), derived from U.S. Customs and Border Protection CROSS rulings.
+* Improve representation of underrepresented HS4 classes.
+* Refine extraction for records containing multiple products or codes.
+* Add explanations for individual predictions.
+* Explore more advanced text-representation methods.
 
-[Original dataset](https://huggingface.co/datasets/flexifyai/cross_rulings_hts_dataset_for_tariffs)
+## 👩‍💻 Author
 
-The dataset is distributed under Apache License 2.0 according to its source card. The repository's MIT license applies to the project code and does not replace the dataset's attribution or licensing requirements.
+**Ayesha Ansari**
 
----
-
-**Author:** Ayesha Ansari
-
-[GitHub Profile](https://github.com/Ayesha-Ansa) · [Live Application](https://hs4-code-prediction-wampk2tvldwfbcgrfjmkfy.streamlit.app/)
+Data Science & AI | Machine Learning | NLP
