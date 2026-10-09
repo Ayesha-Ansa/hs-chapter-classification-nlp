@@ -1,18 +1,19 @@
+
 # ============================================================
 # HS4 CODE PREDICTION APP
 # TF-IDF + Calibrated Linear SVM
-# Includes a conservative low-confidence safeguard
 # ============================================================
 
 import os
 import urllib.request
+from pathlib import Path
 
 import joblib
 import streamlit as st
 
 
 # ============================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -23,32 +24,68 @@ st.set_page_config(
 
 
 # ============================================================
-# MODEL SETTINGS
+# MODEL CONFIGURATION
 # ============================================================
 
-MODEL_FILE = "final_hs4_calibrated_svm.pkl"
-MODEL_URL = os.getenv("MODEL_URL", "")
+BASE_DIR = Path(__file__).resolve().parent
 
-# Provisional safeguard. The app abstains from presenting a result as
-# a stronger prediction when the highest class score is below this value.
-# This is a portfolio-level guardrail, not a universal HS classification rule.
-ABSTAIN_THRESHOLD = float(os.getenv("HS4_ABSTAIN_THRESHOLD", "0.60"))
+MODEL_FILE = BASE_DIR / "final_hs4_calibrated_svm.pkl"
+
+# Keep your existing Streamlit secret/environment configuration.
+MODEL_URL = os.getenv("MODEL_URL", "").strip()
 
 
 # ============================================================
-# DOWNLOAD MODEL WHEN NEEDED
+# MODEL DOWNLOAD
 # ============================================================
 
 def get_model_path():
-    if os.path.exists(MODEL_FILE):
+    """
+    Return the local model path.
+    If the model is not present locally, download it using MODEL_URL.
+    """
+
+    if MODEL_FILE.is_file():
         return MODEL_FILE
 
-    if MODEL_URL:
-        st.info("Downloading trained model...")
-        urllib.request.urlretrieve(MODEL_URL, MODEL_FILE)
+    if not MODEL_URL:
+        raise FileNotFoundError(
+            "The trained model file was not found. "
+            "Place final_hs4_calibrated_svm.pkl beside app.py "
+            "or configure MODEL_URL."
+        )
+
+    try:
+        st.info("Downloading the trained model...")
+
+        request = urllib.request.Request(
+            MODEL_URL,
+            headers={"User-Agent": "HS4-Code-Predictor"},
+        )
+
+        with urllib.request.urlopen(request, timeout=120) as response:
+            model_bytes = response.read()
+
+        if not model_bytes:
+            raise ValueError("The downloaded model file is empty.")
+
+        # Write only after the download completes.
+        temporary_file = MODEL_FILE.with_suffix(".tmp")
+
+        try:
+            temporary_file.write_bytes(model_bytes)
+            temporary_file.replace(MODEL_FILE)
+        finally:
+            if temporary_file.exists():
+                temporary_file.unlink()
+
         return MODEL_FILE
 
-    return None
+    except Exception as exc:
+        raise RuntimeError(
+            "Unable to download the trained model. "
+            "Check MODEL_URL and the model download link."
+        ) from exc
 
 
 # ============================================================
@@ -57,53 +94,64 @@ def get_model_path():
 
 @st.cache_resource
 def load_model():
+    """Load and cache the existing trained model."""
+
     model_path = get_model_path()
-    if model_path is None:
-        return None
-    return joblib.load(model_path)
+    loaded_model = joblib.load(model_path)
+
+    # Validate the minimum interface required by the app.
+    if not hasattr(loaded_model, "predict_proba"):
+        raise TypeError(
+            "The loaded model does not support predict_proba()."
+        )
+
+    if not hasattr(loaded_model, "classes_"):
+        raise TypeError(
+            "The loaded model does not expose classes_."
+        )
+
+    if len(loaded_model.classes_) == 0:
+        raise ValueError("The model contains no trained classes.")
+
+    return loaded_model
 
 
 # ============================================================
-# HEADER
+# APP HEADER
 # ============================================================
 
 st.title("📦 HS4 Code Predictor")
+
 st.markdown(
     """
-### Product Classification Assistant
+    ### Product Classification Assistant
 
-Enter a product description to explore the **three highest-ranked HS4
-headings**. When the model's highest score is below the review threshold,
-the app will flag the result as uncertain rather than presenting it as a
-reliable prediction.
+    Enter a product description to receive the **Top-3 HS4
+    candidate headings** with model scores.
 
-This is a **human-review assistant**, not an automated customs-classification
-authority.
-"""
+    This application is a machine-learning decision-support tool.
+    Always verify tariff classifications before relying on them.
+    """
 )
 
 
 # ============================================================
-# LOAD MODEL
+# LOAD THE EXISTING TRAINED MODEL
 # ============================================================
 
 try:
     model = load_model()
-except Exception as exc:
-    st.error("Unable to load the trained model.")
-    st.code(str(exc))
-    st.warning(
-        "Make sure the model file and the required Python package versions "
-        "are available."
-    )
-    st.stop()
 
-if model is None:
-    st.warning("The trained model is not available.")
-    st.info(
-        "For local testing, place 'final_hs4_calibrated_svm.pkl' "
-        "in the same folder as app.py."
+except Exception:
+    st.error(
+        "Unable to load the trained model. "
+        "Check the model file, download configuration, "
+        "and installed package versions."
     )
+
+    with st.expander("Technical details"):
+        st.exception(__import__("sys").exc_info()[1])
+
     st.stop()
 
 
@@ -114,84 +162,127 @@ if model is None:
 product_text = st.text_area(
     "Enter product description",
     placeholder=(
-        "Example: Women's 100% woven cotton summer dress with floral embroidery"
+        "Example: Women's 100% woven cotton summer "
+        "dress with floral embroidery"
     ),
     height=150,
+    max_chars=5000,
 )
 
 
 # ============================================================
-# HELPER: DISPLAY RANKED CANDIDATES
+# PREDICTION
 # ============================================================
 
-def show_candidates(classes, probabilities, indices, heading):
-    st.subheader(heading)
-    for rank, index in enumerate(indices, start=1):
-        code = str(classes[index])
-        confidence = float(probabilities[index])
+if st.button(
+    "Predict HS4 Code",
+    type="primary",
+    use_container_width=True,
+):
 
-        st.markdown(f"### {rank}. HS4 **{code}**")
-        st.progress(min(max(confidence, 0.0), 1.0))
-        st.write(f"Model score: **{confidence * 100:.2f}%**")
-        if rank < len(indices):
-            st.divider()
+    cleaned_text = product_text.strip().lower()
 
+    if not cleaned_text:
+        st.warning("Please enter a product description.")
 
-# ============================================================
-PREDICTION
-# ============================================================
+    else:
+        try:
+            with st.spinner("Analyzing product description..."):
 
-if st.button("Predict HS4 Code", type="primary", use_container_width=True):
-cleaned_text = product_text.strip().lower()
+                probabilities = model.predict_proba(
+                    [cleaned_text]
+                )[0]
 
-if not cleaned_text:
-    st.warning("Please enter a product description.")
-else:
-    try:
-        with st.spinner("Analyzing product description..."):
-            probabilities = model.predict_proba([cleaned_text])[0]
-            classes = model.classes_
-            top_indices = probabilities.argsort()[-3:][::-1]
+                classes = model.classes_
 
-            predicted_code = str(classes[top_indices[0]])
-            top_score = float(probabilities[top_indices[0]])
+                # Rank model outputs from highest to lowest.
+                top_indices = probabilities.argsort()[::-1][:3]
 
-        # Show the prediction without a blanket confidence warning.
-        st.success(f"Predicted HS4 Code: {predicted_code}")
-        st.write(f"Model score: **{top_score * 100:.2f}%**")
+                if len(probabilities) != len(classes):
+                    raise ValueError(
+                        "The number of prediction scores does not "
+                        "match the number of trained classes."
+                    )
 
-        show_candidates(
-            classes,
-            probabilities,
-            top_indices,
-            "Top-3 HS4 candidate headings",
-        )
+                if not all(
+                    __import__("math").isfinite(float(probabilities[i]))
+                    for i in top_indices
+                ):
+                    raise ValueError(
+                        "The model returned invalid prediction scores."
+                    )
 
-        st.caption(
-            "Model scores are not guarantees of correctness. "
-            "Verify the predicted code against an authoritative tariff source."
-        )
+            # ------------------------------------------------
+            # RESULTS
+            # ------------------------------------------------
 
-    except Exception as exc:
-        st.error("An error occurred while generating the prediction.")
-        st.code(str(exc))
+            st.success("Prediction generated.")
+
+            st.subheader("Top-3 HS4 Predictions")
+
+            for rank, index in enumerate(top_indices, start=1):
+
+                code = str(classes[index])
+                score = float(probabilities[index])
+
+                st.markdown(
+                    f"### {rank}. HS4 **{code}**"
+                )
+
+                st.progress(
+                    max(0.0, min(1.0, score))
+                )
+
+                st.write(
+                    f"Model score: **{score * 100:.2f}%**"
+                )
+
+                if rank < len(top_indices):
+                    st.divider()
+
+            # ------------------------------------------------
+            # IMPORTANT MODEL LIMITATION
+            # ------------------------------------------------
+
+            st.caption(
+                "These scores rank the classes learned during "
+                "training. They do not guarantee correctness or "
+                "prove that the correct HS4 class is supported. "
+                "The app cannot identify a missing true class "
+                "from the model score alone."
+            )
+
+        except Exception:
+            st.error(
+                "Prediction failed. Please try again or check "
+                "the technical details below."
+            )
+
+            with st.expander("Technical details"):
+                st.exception(__import__("sys").exc_info()[1])
+
 
 # ============================================================
 # MODEL INFORMATION
 # ============================================================
 
-with st.expander("About this model and its safeguard"):
-    st.write("Model: Word + Character TF-IDF + Calibrated Linear SVM")
-    st.write("Supported HS4 classes: 252")
-    st.write("Top-1 accuracy on the held-out test split: 69.62%")
-    st.write("Top-3 accuracy on the held-out test split: 81.69%")
-    st.write("Held-out test samples: 2,976")
-    st.write(f"Provisional low-confidence threshold: {ABSTAIN_THRESHOLD:.0%}")
+with st.expander("About this model"):
+
+    st.write(
+        "Model: Word + Character TF-IDF + Calibrated Linear SVM"
+    )
+
+    st.write(f"Supported trained classes: {len(model.classes_)}")
+
+    st.write("Reported Top-1 accuracy: 69.62%")
+
+    st.write("Reported Top-3 accuracy: 81.69%")
+
+    st.write("Evaluation test samples: 2,976")
+
     st.caption(
-        "The threshold is a conservative portfolio safeguard, not a guarantee. "
-        "A score above the threshold does not prove the prediction is correct, "
-        "and a score below it does not prove the true class was excluded. "
-        "This app has not been validated for official customs decisions."
+        "Reported metrics describe the existing evaluation "
+        "results; they are not a guarantee of live prediction quality."
     )
 
 
@@ -200,8 +291,10 @@ with st.expander("About this model and its safeguard"):
 # ============================================================
 
 st.divider()
+
 st.caption(
-    "This tool provides machine-learning predictions for research and "
-    "decision-support purposes. Final tariff classification should be verified "
-    "by a qualified reviewer using the applicable customs guidance."
+    "This tool provides machine-learning predictions for research "
+    "and decision-support purposes. The predicted heading may be "
+    "incorrect. Verify the final classification using applicable "
+    "official tariff guidance and qualified review."
 )
